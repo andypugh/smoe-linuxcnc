@@ -24,6 +24,7 @@ import sys
 import pango
 import math
 import linuxcnc
+from hal_glib import GStat
 
 # constants
 _INCH = 0
@@ -79,6 +80,10 @@ class Combi_DRO(gtk.VBox):
                         gobject.PARAM_READWRITE),
         'font_size' : (gobject.TYPE_INT, 'Font Size', 'The font size of the big numbers, the small ones will be 2.5 times smaler',
                     8, 96, 25, gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT),
+        'toggle_readout' : (gobject.TYPE_BOOLEAN, 'Enable toggling readout with click', 'The DRO will toggle between Absolut , Relativ and DTG with each mouse click.',
+                    True, gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT),
+        'cycle_time' : (gobject.TYPE_INT, 'Cycle Time', 'Time, in milliseconds, that display will sleep between polls',
+                    100, 1000, 150, gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT),
     }
     __gproperties = __gproperties__
 
@@ -93,10 +98,11 @@ class Combi_DRO(gtk.VBox):
     def __init__(self, joint_number = 0):
         super(Combi_DRO, self).__init__()
 
-        # get the necesarry connextions to linuxcnc
+        # get the necessary connections to linuxcnc
         self.joint_number = joint_number
         self.linuxcnc = linuxcnc
         self.status = linuxcnc.stat()
+        self.gstat = GStat()
 
         # set some default values'
         self._ORDER = ["Rel", "Abs", "DTG"]
@@ -114,6 +120,8 @@ class Combi_DRO(gtk.VBox):
         self.machine_units = _MM
         self.unit_convert = 1
         self._auto_units = True
+        self.toggle_readout = True
+        self.cycle_time = 150
 
         # Make the GUI and connect signals
         self.eventbox = gtk.EventBox()
@@ -162,8 +170,9 @@ class Combi_DRO(gtk.VBox):
 
         self.show_all()
 
-        # add the timer at a period of 100 ms
-        gobject.timeout_add(100, self._periodic)
+        self.gstat.connect('not-all-homed', self._not_all_homed )
+        self.gstat.connect('all-homed', self._all_homed )
+        self.gstat.connect('homed', self._homed )
 
         # This try is only needed because while working with glade
         # linuxcnc may not be working
@@ -183,6 +192,10 @@ class Combi_DRO(gtk.VBox):
         else:
             self.machine_units = _INCH
 
+        # add the timer at a period of 100 ms
+        gobject.timeout_add(self.cycle_time, self._periodic)
+
+
     # make an pango attribute to be used with several labels
     def _set_attributes(self, bgcolor, fgcolor, size, weight):
         attr = pango.AttrList()
@@ -198,6 +211,8 @@ class Combi_DRO(gtk.VBox):
 
     # if the eventbox has been clicked, we like to toggle the DRO's
     def _on_eventbox_clicked(self, widget, event):
+        if not self.toggle_readout:
+            return
         self.toogle_readout()
 
     # Get propertys
@@ -245,6 +260,10 @@ class Combi_DRO(gtk.VBox):
                 if name == "font_size":
                     self.font_size = value
                     self._set_labels()
+                if name == "toggle_readout":
+                    self.toggle_readout = value
+                if name == "cycle_time":
+                    self.cycle_time = value
                 if name in ('metric_units', 'actual', 'diameter'):
                     setattr(self, name, value)
                     self.queue_draw()
@@ -322,15 +341,19 @@ class Combi_DRO(gtk.VBox):
 
     # periodic call to update the positions, every 100 ms
     def _periodic(self):
+        self.status.poll()
+
+        if self.status.kinematics_type != linuxcnc.KINEMATICS_IDENTITY and not self.homed:
+            self.main_dro.set_text("----.---")
+            self.dro_left.set_text("----.---")
+            self.dro_right.set_text("----.---")
+            return True
+
         try:
-            self.status.poll()
             main, left, right = self._position()
             if self.system != self._get_current_system():
                 self._set_labels()
                 self.emit("system_changed", self._get_current_system())
-            if self.homed != self.status.homed[self.joint_number]:
-                self.homed = self.status.homed[self.joint_number]
-                self._set_labels()
             if (self._get_current_units() == 20 and self.metric_units) or (self._get_current_units() == 21 and not self.metric_units):
                 if self._auto_units:
                     self.metric_units = not self.metric_units
@@ -399,6 +422,29 @@ class Combi_DRO(gtk.VBox):
             return dtg, rel_pos, abs_pos
         if self._ORDER == ["Abs", "DTG", "Rel"]:
             return abs_pos, dtg, rel_pos
+
+    def _not_all_homed(self, widget, data = None):
+        if self.status.kinematics_type == linuxcnc.KINEMATICS_IDENTITY:
+            self.status.poll()
+            self.homed = self.status.homed[self.joint_number]
+        else:
+            self.homed = False
+        self._set_labels()
+
+    def _all_homed(self, widget, data = None):
+        if self.status.kinematics_type == linuxcnc.KINEMATICS_IDENTITY:
+            return
+        if not self.homed:
+            self.homed = True
+            self._set_labels()
+
+    def _homed(self, widget, data = None):
+        if self.status.kinematics_type != linuxcnc.KINEMATICS_IDENTITY:
+            return
+        else:
+            self.status.poll()
+            self.homed = self.status.homed[self.joint_number]
+            self._set_labels()
 
     # sets the DRO explicity to inch or mm
     # attentions auto_units takes also effekt on that!
@@ -552,6 +598,7 @@ def main():
     MDRO_C.connect("clicked", clicked)
     MDRO_C.set_property('mm_text_template', '%10.2f')
     MDRO_C.set_property('imperial_text_template', '%10.2f')
+    MDRO_C.set_property('toggle_readout', False)
     window.show_all()
     gtk.main()
 

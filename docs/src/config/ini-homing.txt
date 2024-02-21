@@ -1,6 +1,6 @@
 = Homing Configuration
 
-[[cha:homing-configuration]] (((Homing Configuration)))
+[[cha:homing-configuration]]
 
 == Overview
 
@@ -11,11 +11,12 @@ complicated.
 
 == Homing Sequence
 
-There are four possible homing sequences defined by the sign of SEARCH_VEL
-and LATCH_VEL, along with the associated configuration parameters as shown
-in the following table. Two basic conditions exist, SEARCH_VEL and LATCH_VEL
-are the same sign or they are opposite signs. For a more detailed description
-of what each configuration parameter does, see the following section.
+There are four possible homing sequences defined by the sign of HOME_SEARCH_VEL
+and HOME_LATCH_VEL, along with the associated configuration parameters as shown
+in the following table. Two basic conditions exist, HOME_SEARCH_VEL and
+HOME_LATCH_VEL are the same sign or they are opposite signs. For a more
+detailed description of what each configuration parameter does, see the
+following section.
 
 .Homing Sequences
 
@@ -28,7 +29,7 @@ They are defined in an [AXIS] section of the inifile.
 
 [width="80%", options="header", cols="4*^"]
 |==========================================================
-|Homing Type      |SEARCH_VEL |LATCH_VEL    |USE_INDEX
+|Homing Type      |HOME_SEARCH_VEL |HOME_LATCH_VEL    |HOME_USE_INDEX
 |Immediate        |0          |0            |NO
 |Index-only       |0          |nonzero      |YES
 |Switch-only      |nonzero    |nonzero      |NO
@@ -107,7 +108,7 @@ the home switch (depending on the signs of HOME_SEARCH_VEL and
 HOME_LATCH_VEL). The default value is NO.
 
 [NOTE]
-HOME_USE_INDEX requires connections in your hal file to axis.n.index-enable
+HOME_USE_INDEX requires connections in your hal file to joint.n.index-enable
 from the encoder.n.index-enable.
 
 === HOME_OFFSET (((HOME OFFSET)))
@@ -145,16 +146,86 @@ to prevent homing from starting if one of the shared switches is
 already closed. Set this value to 0 to permit homing even if the switch
 is already closed.
 
+=== HOME_ABSOLUTE_ENCODER (((HOME ABSOLUTE ENCODER)))
+
+Use for absolute encoders.  When a request is made to home the joint,
+the current joint position is set to the '[JOINT_n]HOME_OFFSET' value.
+
+The final move to the '[JOINT_n]HOME' position is optional according
+to the 'HOME_ABSOLUTE_ENCODER' setting:
+
+----
+HOME_ABSOLUTE_ENCODER = 0 (Default) joint does not use an absolute encoder
+HOME_ABSOLUTE_ENCODER = 1 Absolute encoder, final move to [JOINT_n]HOME
+HOME_ABSOLUTE_ENCODER = 2 Absolute encoder, NO final move to [JOINT_n]HOME
+----
+
+[NOTE]
+A HOME_IS_SHARED setting is silently ignored.
+[NOTE]
+A request to rehome the joint is silently ignored.
+
+
 === HOME_SEQUENCE (((HOME SEQUENCE)))
 
 Used to define a multi-axis homing sequence HOME ALL and enforce
 homing order (e.g., Z may not be homed if X is not yet homed). An axis
-may be homed after all axes with a lower HOME_SEQUENCE have already
-been homed and are at the HOME_OFFSET. If two axes have the same
-HOME_SEQUENCE, they may be homed at the same time. If HOME_SEQUENCE is
--1 or not specified then this joint will not be homed by the HOME ALL
-sequence. HOME_SEQUENCE numbers start with 0 and there may be no unused
-numbers.
+may be homed after all axes with a lower (absolute value)
+HOME_SEQUENCE have already been homed and are at the HOME_OFFSET. If
+two axes have the same HOME_SEQUENCE, they may be homed at the same
+time. If HOME_SEQUENCE is not specified then this joint will not be
+homed by the HOME ALL sequence. HOME_SEQUENCE numbers start with 0 and
+there may be no unused numbers.
+
+Negative HOME_SEQUENCE values indicate that joints in the sequence
+should synchronize the final move to HOME by waiting until all 
+joints in the sequence are ready.  If any joint has a negative
+HOME_SEQUENCE value, then all joints with the same (positive
+or negative) value will synchronize the final move.
+
+Examples for a 3 joint system
+    
+Two sequences (0,1), no synchronization
+
+----
+[JOINT_0]HOME_SEQUENCE =  0
+[JOINT_1]HOME_SEQUENCE =  1
+[JOINT_2]HOME_SEQUENCE =  1
+----
+    
+Two sequences, joints 1 and 2 synchronized
+
+----
+[JOINT_0]HOME_SEQUENCE =  0
+[JOINT_1]HOME_SEQUENCE = -1
+[JOINT_2]HOME_SEQUENCE = -1
+----
+
+With mixed positive and negative values, joints 1 and 2 synchronized
+
+----
+[JOINT_0]HOME_SEQUENCE =  0
+[JOINT_1]HOME_SEQUENCE = -1
+[JOINT_2]HOME_SEQUENCE =  1
+----
+
+    
+One sequence, no synchronization
+
+----
+[JOINT_0]HOME_SEQUENCE =  0
+[JOINT_1]HOME_SEQUENCE =  0
+[JOINT_2]HOME_SEQUENCE =  0
+----
+    
+One sequence, all joints synchronized
+
+----
+[JOINT_0]HOME_SEQUENCE = -1
+[JOINT_1]HOME_SEQUENCE = -1
+[JOINT_2]HOME_SEQUENCE = -1
+----
+    
 
 === VOLATILE_HOME (((VOLATILE HOME)))
 
@@ -176,8 +247,8 @@ home position like a rotary axis and you want that axis to home at
 the current position when the "Home All" button is pressed in Axis
 the following ini entries for that axis are needed.
 
-. SEARCH_VEL = 0
-. LATCH_VEL = 0
-. USE_INDEX = NO
+. HOME_SEARCH_VEL = 0
+. HOME_LATCH_VEL = 0
+. HOME_USE_INDEX = NO
 . HOME_SEQUENCE = 0
 

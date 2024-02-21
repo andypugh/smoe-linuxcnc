@@ -1,9 +1,10 @@
-[[cha:basic-hal-reference]] (((Basic HAL Reference)))
+[[cha:basic-hal-reference]]
 
 = Basic HAL Reference
 
-[[sec:hal-commands]]
+This document provides a reference to the basics of HAL.
 
+[[sec:hal-commands]]
 == HAL Commands 
 
 More detailed information can be found in the man page for halcmd: run
@@ -106,10 +107,10 @@ must be separated by a space from the pin names.
 ----
 net signal-name pin-name <optional arrow> <optional second pin-name>
 
-net home-x axis.0.home-sw-in <= parport.0.pin-11-in
+net home-x joint.0.home-sw-in <= parport.0.pin-11-in
 ----
 
-In the above example 'home-x' is the signal name, 'axis.0.home-sw-in' is a
+In the above example 'home-x' is the signal name, 'joint.0.home-sw-in' is a
 'Direction IN' pin, '<=' is the optional direction arrow, and 
 'parport.0.pin-11-in' is a 'Direction OUT' pin. This may seem confusing but
 the in and out labels for a parallel port pin indicates the physical way the

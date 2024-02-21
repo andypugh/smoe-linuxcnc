@@ -12,151 +12,6 @@ import os
 timeout = 1.0
 
 
-class LinuxcncError(Exception):
-    pass
-#    def __init__(self, value):
-#        self.value = value
-#    def __str__(self):
-#        return repr(self.value)
-
-class LinuxcncControl:
-    '''
-    issue G-Code commands
-    make sure important modes are saved and restored
-    mode is saved only once, and can be restored only once
-    
-    usage example: 
-        e = emc_control()
-        e.prepare_for_mdi()
-            any internal sub using e.g("G0.....")
-        e.finish_mdi()
-    
-    '''
-
-    def __init__(self):
-        self.c = linuxcnc.command()
-        self.e = linuxcnc.error_channel()
-        self.s = linuxcnc.stat()
-        
-    def running(self, do_poll=True):
-        '''
-        check wether interpreter is running.
-        If so, cant switch to MDI mode.
-        '''
-        if do_poll: 
-            self.s.poll()
-        return (self.s.task_mode == linuxcnc.MODE_AUTO and 
-                self.s.interp_state != linuxcnc.INTERP_IDLE)
-                
-    def set_mode(self,m):
-        '''
-        set EMC mode if possible, else throw LinuxcncError
-        return current mode
-        '''
-        self.s.poll()
-        if self.s.task_mode == m : 
-            return m
-        if self.running(do_poll=False): 
-            raise LinuxcncError("interpreter running - cant change mode")
-        self.c.mode(m)   
-        self.c.wait_complete()
-        return m  
-
-    def set_state(self,m):
-        '''
-        set EMC mode if possible, else throw LinuxcncError
-        return current mode
-        '''
-        self.s.poll()
-        if self.s.task_mode == m : 
-            return m
-        self.c.state(m)   
-        self.c.wait_complete()
-        return m
-
-    def do_home(self,axismask):
-        self.s.poll()
-        self.c.home(axismask)   
-        self.c.wait_complete()
-
-
-    def ok_for_mdi(self):
-        ''' 
-        check wether ok to run MDI commands.
-        '''
-        self.s.poll()
-        return not self.s.estop and self.s.enabled and self.s.homed 
-        
-    def prepare_for_mdi(self):
-        ''' 
-        check wether ok to run MDI commands.
-        throw  LinuxcncError if told so.
-        return current mode
-        '''
-
-        self.s.poll()
-        if self.s.estop:
-            raise LinuxcncError("machine in ESTOP")
-        
-        if not self.s.enabled:
-            raise LinuxcncError("machine not enabled")
-        
-        if not self.s.homed:
-            raise LinuxcncError("machine not homed")
-        
-        if self.running():
-            raise LinuxcncError("interpreter not idle")
-            
-        return self.set_mode(linuxcnc.MODE_MDI)
-
-    g_raise_except = True
-    
-    def g(self,code,wait=False):
-        '''
-        issue G-Code as MDI command.
-        wait for completion if reqested
-        '''
-        
-        self.c.mdi(code)
-        if wait:
-            try:
-                while self.c.wait_complete() == -1:
-                    pass
-                return True
-            except KeyboardInterrupt:
-                print "interrupted by keyboard in c.wait_complete()"
-                return False
-
-        self.error = self.e.poll()
-        if self.error:
-            kind, text = self.error
-            if kind in (linuxcnc.NML_ERROR, linuxcnc.OPERATOR_ERROR):
-                if self.g_raise_except:
-                    raise LinuxcncError(text)
-                else:        
-                    print ("error " + text)
-            else:
-                print ("info " + text)
-        return False
-
-    def get_current_tool(self):
-        self.s.poll()
-        return self.s.tool_in_spindle
-
-    def active_codes(self):
-        self.e.poll()
-        return self.s.gcodes
-    
-    def get_current_system(self):
-        g = self.active_codes()
-        for i in g:
-                if i >= 540 and i <= 590:
-                        return i/10 - 53
-                elif i >= 590 and i <= 593:
-                        return i - 584
-        return 1
-
-
 def introspect():
     os.system("halcmd show pin python-ui")
 
@@ -169,7 +24,7 @@ def wait_for_pin_value(pin_name, value, timeout=1):
         time.sleep(0.1)
 
     if h[pin_name] != value:
-        print "timeout!  pin %s didn't get to %f" % (pin_name, value)
+        print "timeout!  pin %s is %f, didn't get to %f" % (pin_name, h[pin_name], value)
         introspect()
         sys.exit(1)
 
@@ -178,21 +33,20 @@ def wait_for_pin_value(pin_name, value, timeout=1):
 
 def verify_pin_value(pin_name, value):
     if (h[pin_name] != value):
-        print "pin %s is not %f" % (pin_name, value)
+        print "pin %s is %f, not %f" % (pin_name, h[pin_name], value)
         sys.exit(1);
 
     print "pin %s is %f" % (pin_name, value)
 
 
 def get_interp_param(param_number):
-    e.c.mdi("(debug, #%d)" % param_number)
-    while e.c.wait_complete() == -1:
-        pass
+    c.mdi("(debug, #%d)" % param_number)
+    c.wait_complete()
 
     # wait up to 2 seconds for a reply
     start = time.time()
     while (time.time() - start) < 2:
-        error = e.e.poll()
+        error = e.poll()
         if error == None:
             time.sleep(0.010)
             continue
@@ -226,6 +80,42 @@ def verify_stable_pin_values(pins, duration=1):
         time.sleep(0.010)
 
 
+def verify_tool_number(tool_number):
+    verify_interp_param(5400, tool_number)        # 5400 == tool in spindle
+    verify_pin_value('tool-number', tool_number)  # pin from iocontrol
+
+    # verify stat buffer
+    s.poll()
+    if s.tool_in_spindle != tool_number:
+        print "ERROR: stat buffer .tool_in_spindle is %f, should be %f" % (s.tool_in_spindle, tool_number)
+        sys.exit(1)
+    print "stat buffer .tool_in_spindle is %f" % s.tool_in_spindle
+
+
+def do_tool_change_handshake(tool_number, pocket_number):
+    # prepare for tool change
+    wait_for_pin_value('tool-prepare', 1)
+    verify_pin_value('tool-prep-number', tool_number)
+    verify_pin_value('tool-prep-pocket', pocket_number)
+
+    h['tool-prepared'] = 1
+    wait_for_pin_value('tool-prepare', 0)
+    h['tool-prepared'] = 0
+
+    time.sleep(0.1)
+    s.poll()
+    print "tool prepare done, s.pocket_prepped = ", s.pocket_prepped
+    if s.pocket_prepped != pocket_number:
+        print "ERROR: wrong pocket prepped in stat buffer (got %d, expected %d)" % (s.pocket_prepped, pocket_number)
+        sys.exit(1)
+
+    # change tool
+    wait_for_pin_value('tool-change', 1)
+    h['tool-changed'] = 1
+    wait_for_pin_value('tool-change', 0)
+    h['tool-changed'] = 0
+
+
 
 
 #
@@ -254,45 +144,36 @@ os.system("halcmd source ./postgui.hal")
 # connect to LinuxCNC
 #
 
-e = LinuxcncControl()
-e.g_raise_except = False
-e.set_state(linuxcnc.STATE_ESTOP_RESET)
-e.set_state(linuxcnc.STATE_ON)
-e.set_mode(linuxcnc.MODE_MDI)
+c = linuxcnc.command()
+s = linuxcnc.stat()
+e = linuxcnc.error_channel()
+
+c.state(linuxcnc.STATE_ESTOP_RESET)
+c.state(linuxcnc.STATE_ON)
+c.mode(linuxcnc.MODE_MDI)
+c.wait_complete()
 
 
+# at startup, we should have the special tool 0 in the spindle, meaning
+# "no tool" or "unknown tool"
+
+verify_tool_number(0)
 
 
 #
 # test m6 to get a baseline
 #
 
-e.g('t1 m6')
+print "*** starting 'T1 M6' tool change"
 
-# prepare for tool change
-wait_for_pin_value('tool-prepare', 1)
-verify_pin_value('tool-prep-number', 1)
-verify_pin_value('tool-prep-pocket', 1)
-h['tool-prepared'] = 1
-wait_for_pin_value('tool-prepare', 0)
-h['tool-prepared'] = 0
+c.mdi('t1 m6')
+c.wait_complete()
 
-time.sleep(0.1)
-e.s.poll()
-print "tool prepare done, e.s.pocket_prepped = ", e.s.pocket_prepped
+do_tool_change_handshake(tool_number=1, pocket_number=1)
 
-# change tool
-wait_for_pin_value('tool-change', 1)
-h['tool-changed'] = 1
-wait_for_pin_value('tool-change', 0)
-h['tool-changed'] = 0
+print "*** tool change complete"
+verify_tool_number(1)
 
-time.sleep(0.1)
-e.s.poll()
-print "tool change done, e.s.tool_in_spindle = ", e.s.tool_in_spindle
-print "current tool: ", e.get_current_tool()
-
-verify_interp_param(5400, 1)      # tool in spindle
 verify_interp_param(5401, 0)      # tlo x
 verify_interp_param(5402, 0)      # tlo y
 verify_interp_param(5403, 1)      # tlo z
@@ -317,7 +198,8 @@ verify_interp_param(5426, 0)      # current u
 verify_interp_param(5427, 0)      # current v
 verify_interp_param(5428, 0)      # current w
 
-e.g('g43')
+c.mdi('g43')
+c.wait_complete()
 
 verify_interp_param(5420, 0)      # current x
 verify_interp_param(5421, 0)      # current y
@@ -338,7 +220,10 @@ introspect()
 # now finally test m61
 #
 
-e.g('m61 q10')
+print "*** starting 'M61 Q10' tool change"
+
+c.mdi('m61 q10')
+c.wait_complete()
 
 verify_stable_pin_values(
     {
@@ -350,10 +235,8 @@ verify_stable_pin_values(
     duration=1
 )
 
-print "m61 done, e.s.tool_in_spindle = ", e.s.tool_in_spindle
-print "current tool: ", e.get_current_tool()
+verify_tool_number(10)
 
-verify_interp_param(5400, 10)     # tool in spindle
 verify_interp_param(5401, 0)      # tlo x
 verify_interp_param(5402, 0)      # tlo y
 verify_interp_param(5403, 3)      # tlo z
@@ -378,7 +261,8 @@ verify_interp_param(5426, 0)      # current u
 verify_interp_param(5427, 0)      # current v
 verify_interp_param(5428, 0)      # current w
 
-e.g('g43')
+c.mdi('g43')
+c.wait_complete()
 
 verify_interp_param(5420, 0)      # current x
 verify_interp_param(5421, 0)      # current y
@@ -389,6 +273,37 @@ verify_interp_param(5425, 0)      # current c
 verify_interp_param(5426, 0)      # current u
 verify_interp_param(5427, 0)      # current v
 verify_interp_param(5428, 0)      # current w
+
+
+#
+# use M6 to unload the spindle (T0)
+#
+
+print "*** using 'T0 M6' to unload the spindle"
+c.mdi("t0 m6")
+c.wait_complete()
+do_tool_change_handshake(tool_number=0, pocket_number=0)
+verify_tool_number(0)
+
+
+#
+# use M61 to load T1 in the spindle again
+#
+
+print "*** using 'M61 Q1' to load a tool again"
+c.mdi("m61 q1")
+c.wait_complete()
+verify_tool_number(1)
+
+
+#
+# use M61 to unload the spindle (T0)
+#
+
+print "*** using 'M61 Q0' to unload the spindle again"
+c.mdi("m61 q0")
+c.wait_complete()
+verify_tool_number(0)
 
 
 # if we get here it all worked!

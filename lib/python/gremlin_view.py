@@ -112,17 +112,14 @@ def ini_setup ():
 
 def get_linuxcnc_ini_file():
     """find linuxcnc ini file with pgrep"""
-    # example pgrep -lf output:
-    # 22224 linuxcncsvr -ini /path_to/somefile.ini
-    s = subprocess.Popen(['pgrep','-lf','linuxcncsvr']
-                         ,stdout=subprocess.PIPE
-                         ,stderr=subprocess.PIPE
-                         )
-    p,e = s.communicate()
-    if s.returncode:
-        #print(_('get_linuxcnc_ini_file: stdout= %s') % p)
-        #print(_('get_linuxcnc_ini_file: stderr= %s') % e)
-        print(_('%s:linuxcnc not running') % g_progname)
+    ps   = subprocess.Popen('ps -C linuxcncsvr --no-header -o args'.split(),
+                             stdout=subprocess.PIPE
+                           )
+    p,e = ps.communicate()
+
+    if ps.returncode:
+        print(_('get_linuxcnc_ini_file: stdout= %s') % p)
+        print(_('get_linuxcnc_ini_file: stderr= %s') % e)
         return None
 
     ans = p.split()[p.split().index('-ini')+1]
@@ -159,6 +156,12 @@ class GremlinView():
         self.topwindow = bldr.get_object('gremlin_view_window')
         self.gbox      = bldr.get_object('gremlin_view_box')
         self.halg      = bldr.get_object('gremlin_view_hal_gremlin')
+
+        #self.halg.show_lathe_radius = 1 # for test, hal_gremlin default is Dia
+
+        self.halg.init_glcanondraw(
+             trajcoordinates=self.halg.inifile.find('TRAJ','COORDINATES'),
+             kinstype=self.halg.inifile.find('KINS','KINEMATICS'))
 
         if not linuxcnc_running:
             # blanks display area:

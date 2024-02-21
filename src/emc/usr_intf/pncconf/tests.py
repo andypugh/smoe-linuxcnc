@@ -1,4 +1,4 @@
-#!/usr/bin/python2.4
+#!/usr/bin/env python2.4
 # -*- encoding: utf-8 -*-
 #    This is pncconf, a graphical configuration editor for LinuxCNC
 #    Chris Morley copyright 2009
@@ -652,7 +652,7 @@ But there is not one in the machine-named folder.."""),True)
                 ending = ".value"
                 pwminvertlist = self.a.pwmgen_invert_pins(pwm_sig)
                 for i in pwminvertlist:
-                    halrun.write("setp    "+i+".invert_output true")
+                    halrun.write("setp    "+i+".invert_output true\n")
             else: # sserial PWM
                 pwm_enable = self.d.make_pinname(pwm_sig,False,True) # get prefix only
                 halrun.write("net enable %s \n"%  (pwm_enable +"analogena"))
@@ -676,7 +676,7 @@ But there is not one in the machine-named folder.."""),True)
                 self.scale = get_value(w[axis + "stepscale"]) * 1
             stepinvertlist = self.a.stepgen_invert_pins(step_sig)
             for i in stepinvertlist:
-                halrun.write("setp    "+i+".invert_output true")
+                halrun.write("setp    "+i+".invert_output true\n")
             halrun.write("setp %s.step_type 0 \n"% (self.step_signalname))
             halrun.write("setp %s.control-type 1 \n"% (self.step_signalname))
             halrun.write("setp %s.position-scale %f \n"% (self.step_signalname,self.scale))
@@ -1121,7 +1121,7 @@ But there is not one in the machine-named folder.."""),True)
             signallist = ((axis+"-enable"),"machine-is-enabled","estop-out","charge-pump","force-pin-true")
         else:
             signallist = ("spindle-cw","spindle-ccw","spindle-brake","spindle-on","machine-is-enabled",
-                            "estop-out","charge-pump","force-pin-true")
+                            "spindle-enable","estop-out","charge-pump","force-pin-true")
         halrun = self.halrun
         def write_pins(pname,p,i,t):
             if p in signallist:

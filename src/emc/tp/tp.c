@@ -129,7 +129,7 @@ STATIC int tpRotaryMotionCheck(TP_STRUCT const * const tp, TC_STRUCT const * con
 /**
  * Wrapper to bounds-check the tangent kink ratio from HAL.
  */
-STATIC double tpGetTangentKinkRatio() {
+STATIC double tpGetTangentKinkRatio(void) {
     const double max_ratio = 0.7071;
     const double min_ratio = 0.001;
 
@@ -351,10 +351,10 @@ int tpClearDIOs(TP_STRUCT * const tp) {
     tp->syncdio.anychanged = 0;
     tp->syncdio.dio_mask = 0;
     tp->syncdio.aio_mask = 0;
-    for (i = 0; i < num_dio; i++) {
+    for (i = 0; i < emcmotConfig->numDIO; i++) {
         tp->syncdio.dios[i] = 0;
     }
-    for (i = 0; i < num_aio; i++) {
+    for (i = 0; i < emcmotConfig->numAIO; i++) {
         tp->syncdio.aios[i] = 0;
     }
 
@@ -391,6 +391,7 @@ int tpClear(TP_STRUCT * const tp)
     emcmotStatus->requested_vel = 0.0;
     emcmotStatus->distance_to_go = 0.0;
     ZERO_EMC_POSE(emcmotStatus->dtg);
+    SET_MOTION_INPOS_FLAG(1);
 
     return tpClearDIOs(tp);
 }
@@ -1130,6 +1131,25 @@ STATIC int tpCreateArcArcBlend(TP_STRUCT * const tp, TC_STRUCT * const prev_tc, 
                 res_init);
         return res_init;
     }
+
+    int coplanar1 = pmCartCartParallel(&geom.binormal,
+            &prev_tc->coords.circle.xyz.normal,
+            TP_ANGLE_EPSILON);
+
+    if (!coplanar1) {
+        tp_debug_print("aborting blend arc, arc id %d is not coplanar with binormal\n", prev_tc->id);
+        return TP_ERR_FAIL;
+    }
+
+    int coplanar2 = pmCartCartParallel(&geom.binormal,
+            &tc->coords.circle.xyz.normal,
+            TP_ANGLE_EPSILON);
+    if (!coplanar2) {
+        tp_debug_print("aborting blend arc, arc id %d is not coplanar with binormal\n", tc->id);
+        return TP_ERR_FAIL;
+    }
+
+
 
     int res_param = blendComputeParameters(&param);
     int res_points = blendFindPoints3(&points_approx, &geom, &param);
@@ -2258,12 +2278,12 @@ void tpToggleDIOs(TC_STRUCT * const tc) {
 
     int i=0;
     if (tc->syncdio.anychanged != 0) { // we have DIO's to turn on or off
-        for (i=0; i < num_dio; i++) {
+        for (i=0; i < emcmotConfig->numDIO; i++) {
             if (!(tc->syncdio.dio_mask & (1 << i))) continue;
             if (tc->syncdio.dios[i] > 0) emcmotDioWrite(i, 1); // turn DIO[i] on
             if (tc->syncdio.dios[i] < 0) emcmotDioWrite(i, 0); // turn DIO[i] off
         }
-        for (i=0; i < num_aio; i++) {
+        for (i=0; i < emcmotConfig->numAIO; i++) {
             if (!(tc->syncdio.aio_mask & (1 << i))) continue;
             emcmotAioWrite(i, tc->syncdio.aios[i]); // set AIO[i]
         }

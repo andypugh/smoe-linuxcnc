@@ -110,7 +110,7 @@ The valid entries in the format string are:
 
 .B
  [firmware=\fIF\fB]
- [num_encoders=\fIN\fB]
+ \fB[num_encoders=\fIN\fB]
  [ssi_chan_\fIN\fB=\fIabc%nq\fB]
  [biss_chan_\fIN\fB=\fIabc%nq\fB]
  [fanuc_chan_\fIN\fB=\fIabc%nq\fB]
@@ -124,7 +124,7 @@ The valid entries in the format string are:
  [enable_raw]
 
 .TP
-\fBfirmware\fR [optional]
+\fBfirmware [\fIoptional\fB]
 Load the firmware specified by F into the FPGA on this board.  If no
 "\fBfirmware=\fIF\fR" string is specified, the FPGA will not be
 re-programmed but may continue to run a previously downloaded firmware.
@@ -1052,7 +1052,9 @@ Digital Outputs described in the Canonical Device Interface (part of
 the HAL General Reference document).  Each GPIO can have the following
 HAL Pins:
 
-(bit out) in & in_not: State (normal and inverted) of the hardware
+.TP
+(bit out) in & in_not
+State (normal and inverted) of the hardware
 input pin.  Both full GPIO pins and IO pins used as inputs by active
 module instances have these pins.
 
@@ -1061,6 +1063,7 @@ module instances have these pins.
 Value to be written (possibly inverted) to the hardware
 output pin.  Only full GPIO pins have this pin.
 
+.PP
 Each GPIO can have the following Parameters:
 
 .TP
@@ -1094,6 +1097,27 @@ This parameter only has an effect if the
 value of the GPIO will be the inverse of the value on the "out" HAL pin.
 Only full GPIO pins and IO pins used as outputs by active module instances
 have this parameter.
+
+.PP
+When a physical I/O pin is used by a special function, the related
+.BR is_output ", and " is_opendrain
+HAL parameters are aliased to the special function.  For instance, if gpio 1
+is taken over by pwmgen 0's first output, then aliases like
+.B hm2_7i92.0.pwmgen.00.out0.invert_output
+(referring to
+.BR hm2_7i92.0.gpio.001.invert_output )
+will be automatically created.  When more than one GPIO is connected to the
+same special function, an extra .#. is inserted so that the settings for
+each related GPIO can be set separately.  For example, for the firmware
+SV12IM_2X7I48_72, the alias
+.B hm2_5i20.0.pwmgen.00.0.enable.invert_output
+(referring to 
+.BR hm2_5i20.0.gpio.000.invert_output )
+and
+.B hm2_5i20.0.pwmgen.00.1.enable.invert_output
+(referring to
+.BR hm2_5i20.0.gpio.023.invert_output )
+are both created.
 
 .SH led
 

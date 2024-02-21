@@ -1,4 +1,4 @@
-[[cha:linuxcnc-user-introduction]](((LinuxCNC User Introduction)))
+[[cha:linuxcnc-user-introduction]]
 
 = LinuxCNC User Introduction
 
@@ -24,7 +24,7 @@ following example the name of the configuration is 'My Lathe'.
 **** My_Lathe.ini (this is read by the linuxcnc script)
 **** My_Lathe.hal (this hal file is loaded before the gui)
 **** post_gui.hal (this hal file is loaded after the gui)
-**** linuxcnc.var (stores the <<sec:parameters,parameters>>)
+**** linuxcnc.var (stores the <<gcode:parameters,parameters>>)
 **** linuxcnc.var.bak (a backup parameter file)
 **** tool.tbl (the tool table file)
 ** nc_files
@@ -88,11 +88,6 @@ image::../gui/images/gmoccapy_3_axis.png[align="center"]
    following screen shot shows NGCGUI imbedded into Axis.
 
 image::../gui/images/ngcgui.png[align="center"]
-
-<<cha:keystick-gui,'Keystick'>>, a character-based screen graphics program
-  suitable for minimal installations (without the X server running).
-
-image::../gui/images/keystick.png[align="center"]
 
 === Additional Features
 
